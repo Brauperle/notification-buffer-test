@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import {
   NotificationContainer,
   NotificationManager,
@@ -13,41 +13,59 @@ If you wish to save the state somewhere else, go for it.
 Just keep rendering <OnlineStatusMock /> 
 */
 
-const withOnlineStatus = WrappedComponent =>
-  class WithOnlineStatus extends React.Component {
-    constructor(props) {
-      super(props);
-      this.state = { isOnline: false };
-    }
-    render() {
-      const { isOnline } = this.state;
-      return (
-        <>
-          <OnlineStatusMock
-            onIsOnlineChange={isOnline => this.setState({ isOnline })}
-          />
-          <WrappedComponent {...this.props} isOnline={isOnline} />
-        </>
-      );
-    }
-  };
 
-class App extends React.Component {
-  componentDidUpdate({ isOnline }) {
-    NotificationManager.info(isOnline ? 'Online' : 'Offline');
+const App = () => {
+
+  let inter = useRef("")
+  let dropOffBuffer = useRef(false)
+
+  const [isOnline, setIsOnline] = useState(false);
+  const [isTrulyOnline, setIsTrulyOnline] = useState(false);
+
+  const updateNotification = bool => {
+    NotificationManager.info(bool ? 'Online' : 'Offline');
   }
 
-  render() {
-    const { isOnline } = this.props;
-    return (
-      <>
-        <div className={isOnline ? 'online' : 'offline'}>
-          {isOnline ? 'Online' : 'Offline'}
-          <NotificationContainer />
-        </div>
-      </>
-    );
-  }
+  return (
+    <div className={isOnline ? 'online' : 'offline'}>
+      <OnlineStatusMock
+        onIsOnlineChange={isOnlineRaw => {
+          setIsOnline(isOnlineRaw) // instant
+
+          // User is truly online, online is clicked
+          // Nothing should happen
+          // Except reset the "Offline" buffer
+          if( isTrulyOnline && isOnlineRaw ) {
+            dropOffBuffer.current = false
+          }
+
+          // User is truly online, offline was "clicked"
+          // need to buffer to 2 seconds 
+          if( isTrulyOnline && !isOnlineRaw ) {
+
+            dropOffBuffer.current = true
+            inter.current = setTimeout(() => {
+
+              if(dropOffBuffer.current) {
+                updateNotification(false)
+                setIsTrulyOnline(false)
+                dropOffBuffer.current = false
+              }
+            }, 2000)
+          } 
+
+          // User is truly offline, online was clicked 
+          // need to connect immediatly
+          if( !isTrulyOnline && isOnlineRaw ) {
+            updateNotification(true)
+            setIsTrulyOnline(true)
+          }
+        }}
+      /> 
+      {isOnline ? 'Online' : 'Offline'}
+      <NotificationContainer />
+    </div>
+  )
 }
 
-export default withOnlineStatus(App);
+export default App;
